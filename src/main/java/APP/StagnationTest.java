@@ -2,17 +2,12 @@ package APP;
 
 import com.alibaba.fastjson.JSONObject;
 import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /*
  * 卡滞测试
  */
 public class StagnationTest {
 
-    private static final Logger logger = LoggerFactory.getLogger(StagnationTest.class);
-    public static void performStagnationTest(List<JSONObject> allMessages, String field_name, boolean windowStagnationFlag) 
+    public static void performStagnationTest(List<JSONObject> allMessages, String field_name, Boolean windowStagnationFlag) 
     {
         //窗口达到22时才触发卡滞计算
         if(allMessages.size() < Constants.TOTAL_WINDOW_SIZE)

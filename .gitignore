@@ -24,7 +24,6 @@ hs_err_pid*
 replay_pid*
 
 # Maven
-*.class
 target/
 out/
 pom.xml.tag
