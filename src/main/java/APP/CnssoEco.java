@@ -24,8 +24,8 @@ import java.util.List;
 
 public class CnssoEco {
 
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern(Constants.TIME_FORMAT);
-    
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+
     private static final Logger logger = LoggerFactory.getLogger(CnssoEco.class);
 
     public static void main(String[] args) throws Exception {
@@ -66,87 +66,78 @@ public class CnssoEco {
                 .map(value -> DataTransformer.transformData(JSON.parseObject(value)))
                 .setParallelism(1)
                 .keyBy(a -> a.getJSONObject("profile").getString("device_id"));
-        
+
         // 2. 数据处理
         SingleOutputStreamOperator<JSONObject> process = jsonObjectStringKeyedStream
                 .process(new QualityControlProcessFunction());
 
         // 3. 发送消息到下游
-        FlinkKafkaProducer<String> stringFlinkKafkaProducer = KafkaUtils.sendKafkaDs(Constants.KAFKA_TOPIC_QC, Constants.KAFKA_GROUP_ID);
-        
+        FlinkKafkaProducer<String> stringFlinkKafkaProducer = KafkaUtils.sendKafkaDs(Constants.KAFKA_TOPIC_QC,
+                Constants.KAFKA_GROUP_ID);
+
         process.map(JSONObject::toString)
-               .addSink(stringFlinkKafkaProducer);
+                .addSink(stringFlinkKafkaProducer);
 
         env.execute();
     }
 
     private static class QualityControlProcessFunction extends KeyedProcessFunction<String, JSONObject, JSONObject> {
         private ListState<JSONObject> count_All;
-        private ListState<JSONObject> jf_CountListState;
-        private ListState<JSONObject> cdomCountBuffer;
-        private ListState<JSONObject> chlCountBuffer;
-        private ListState<JSONObject> turbidityCountBuffer;
+        //记录targetIndex-1条所在的窗口是否形成卡滞
+        private boolean windowStagnationFlag;
 
         @Override
         public void open(Configuration parameters) throws Exception {
             super.open(parameters);
-            jf_CountListState = getRuntimeContext().getListState(
-                    new ListStateDescriptor<>("jf_CountListState", JSONObject.class));
             count_All = getRuntimeContext().getListState(
                     new ListStateDescriptor<>("count_All", JSONObject.class));
-            cdomCountBuffer = getRuntimeContext().getListState(
-                    new ListStateDescriptor<>("cdomCountBuffer", JSONObject.class));
-            chlCountBuffer = getRuntimeContext().getListState(
-                    new ListStateDescriptor<>("chlCountBuffer", JSONObject.class));
-            turbidityCountBuffer = getRuntimeContext().getListState(
-                    new ListStateDescriptor<>("turbidityCountBuffer", JSONObject.class));
+            windowStagnationFlag = false;
         }
 
         @Override
         public void processElement(JSONObject value, Context ctx, Collector<JSONObject> out) throws Exception {
+
+            // 仪器测试
             QualityControl.performInstrumentTest(value);
 
+            // 添加到缓存
             count_All.add(value);
             setCountSize(count_All, Constants.TOTAL_WINDOW_SIZE);
-            List<JSONObject> count_All_List = new ArrayList<>();
-            count_All.get().forEach(count_All_List::add);
-            boolean firstWindow = count_All_List.size() == Constants.JIANFENG_WINDOW_SIZE;
 
-            jf_CountListState.add(value);
-            setCountSize(jf_CountListState, Constants.JIANFENG_WINDOW_SIZE);
-            List<JSONObject> jf_CountList = new ArrayList<>();
-            jf_CountListState.get().forEach(jf_CountList::add);
+            List<JSONObject> allMessages = new ArrayList<>();
+            count_All.get().forEach(allMessages::add);
 
-            QualityControl.performJianFengTest(jf_CountList, Constants.CHL_FIELD, firstWindow);
-            QualityControl.performJianFengTest(jf_CountList, Constants.CDOM_FIELD, firstWindow);
-            QualityControl.performJianFengTest(jf_CountList, Constants.TURBIDITY_FIELD, firstWindow);
+            // 当有足够消息时(n >= 5)，才处理n-2的消息
+            if (allMessages.size() < Constants.JIANFENG_WINDOW_SIZE) {
+                return;
+            }
 
-            List<JSONObject> chlBuffer = new ArrayList<>();
-            chlCountBuffer.get().forEach(chlBuffer::add);
-            StagnationTest.performStagnationTest(chlBuffer, jf_CountList, Constants.CHL_FIELD, firstWindow);
-            chlCountBuffer.update(chlBuffer);
+            // 4.1 处理尖峰测试
+            List<JSONObject> jf_window = allMessages.subList(
+                    allMessages.size() - Constants.JIANFENG_WINDOW_SIZE,
+                    allMessages.size());
 
-            List<JSONObject> cdomBuffer = new ArrayList<>();
-            cdomCountBuffer.get().forEach(cdomBuffer::add);
-            StagnationTest.performStagnationTest(cdomBuffer, jf_CountList, Constants.CDOM_FIELD, firstWindow);
-            cdomCountBuffer.update(cdomBuffer);
+            boolean firstWindow = allMessages.size() == Constants.JIANFENG_WINDOW_SIZE;
+            QualityControl.performJianFengTest(jf_window, Constants.CHL_FIELD, firstWindow);
+            QualityControl.performJianFengTest(jf_window, Constants.CDOM_FIELD, firstWindow);
+            QualityControl.performJianFengTest(jf_window, Constants.TURBIDITY_FIELD, firstWindow);
 
-            List<JSONObject> turbidityBuffer = new ArrayList<>();
-            turbidityCountBuffer.get().forEach(turbidityBuffer::add);
-            StagnationTest.performStagnationTest(turbidityBuffer, jf_CountList, Constants.TURBIDITY_FIELD, firstWindow);
-            turbidityCountBuffer.update(turbidityBuffer);
+            StagnationTest.performStagnationTest(allMessages, Constants.CHL_FIELD, windowStagnationFlag);
+            StagnationTest.performStagnationTest(allMessages, Constants.CDOM_FIELD, windowStagnationFlag);
+            StagnationTest.performStagnationTest(allMessages, Constants.TURBIDITY_FIELD, windowStagnationFlag);
 
-            jf_CountListState.update(jf_CountList);
-            count_All.update(count_All_List);
+            // 4.3 更新状态
+            count_All.update(allMessages);
 
-            if (count_All_List.size() == Constants.TOTAL_WINDOW_SIZE) {
-                JSONObject firstData = jf_CountList.get(0);
+            if (allMessages.size() == Constants.TOTAL_WINDOW_SIZE) {
+                JSONObject firstData = allMessages.get(0);
                 System.out.println(firstData.toString());
+
                 out.collect(firstData);
             }
         }
 
-        private void setCountSize(ListState<JSONObject> stateCountBuffer, int size) throws Exception {
+        private static void setCountSize(ListState<JSONObject> stateCountBuffer, int size) throws Exception {
             List<JSONObject> window = new ArrayList<>();
             stateCountBuffer.get().forEach(window::add);
             if (window.size() > size) {
@@ -154,13 +145,6 @@ public class CnssoEco {
                 stateCountBuffer.update(window);
             }
         }
+
     }
 }
-
-
-
-
-
-
-
-
