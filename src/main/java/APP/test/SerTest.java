@@ -3,7 +3,7 @@ package APP.test;
 import Utils.KafkaUtils;
 import com.alibaba.fastjson.JSONObject;
 
-import APP.CnssoEco;
+
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.state.ListState;
@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import APP.OneClass.*;;
 
 
 public class SerTest {

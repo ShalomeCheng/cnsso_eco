@@ -1,6 +1,7 @@
-package APP;
+package APP.MultipleClass;
 
 import com.alibaba.fastjson.JSONObject;
+
 import java.util.List;
 
 public class QualityControl {

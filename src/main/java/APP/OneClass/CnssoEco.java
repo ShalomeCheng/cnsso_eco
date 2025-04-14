@@ -3,9 +3,6 @@ package APP.OneClass;
 import Utils.KafkaUtils;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-
-import APP.Constants;
-
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
@@ -31,7 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class OneClass {
+public class CnssoEco {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static final String CHL_FIELD = "chl";
     private static final String CDOM_FIELD = "cdom";
@@ -39,7 +36,7 @@ public class OneClass {
     private static final int JF_WINDOW_SIZE = 5;
     private static final int TOTAL_WINDOW_SIZE = 22;
 
-    private static final Logger logger = LoggerFactory.getLogger(OneClass.class);
+    private static final Logger logger = LoggerFactory.getLogger(CnssoEco.class);
 
     public static void main(String[] args) throws Exception {
 
