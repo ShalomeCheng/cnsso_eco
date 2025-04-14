@@ -1,13 +1,17 @@
 package APP;
 
 import com.alibaba.fastjson.JSONObject;
+
+import java.io.IOException;
 import java.util.List;
+
+import org.apache.flink.api.common.state.ValueState;
 /*
  * 卡滞测试
  */
 public class StagnationTest {
 
-    public static void performStagnationTest(List<JSONObject> allMessages, String field_name, Boolean windowStagnationFlag) 
+    public static void performStagnationTest(List<JSONObject> allMessages, String field_name, ValueState<Boolean> windowStagnationFlag) throws IOException 
     {
         //窗口达到22时才触发卡滞计算
         if(allMessages.size() < Constants.TOTAL_WINDOW_SIZE)
@@ -27,18 +31,18 @@ public class StagnationTest {
             {
                 sameCount++;
                 //如果前一个窗口是卡滞状态，那么第20位以后相同的数据，直接可以判断为卡滞
-                if(windowStagnationFlag == true)
+                if(windowStagnationFlag.value() == true)
                 {
                     break;
                 }
             }else
             {
-                windowStagnationFlag = false;
+                windowStagnationFlag.update(false);                
                 break;
             }
         }
 
-        if(windowStagnationFlag)
+        if(windowStagnationFlag.value() == true)
         {
             System.out.println("标记n-2条卡滞");
             //targetIndex位直接标记卡滞
@@ -50,7 +54,7 @@ public class StagnationTest {
             //20位全部标记卡滞
             System.out.println("当前窗口20条数据卡滞");
             markStagnation(allMessages.subList(0, targetIndex), field_name);
-            windowStagnationFlag = true;
+            windowStagnationFlag.update(true);            
         }
         else
         {

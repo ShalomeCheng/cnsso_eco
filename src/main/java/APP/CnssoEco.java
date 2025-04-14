@@ -6,6 +6,9 @@ import com.alibaba.fastjson.JSONObject;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -82,16 +85,18 @@ public class CnssoEco {
     }
 
     private static class QualityControlProcessFunction extends KeyedProcessFunction<String, JSONObject, JSONObject> {
-        private ListState<JSONObject> count_All;
+        ListState<JSONObject> count_All;
         //记录targetIndex-1条所在的窗口是否形成卡滞
-        private boolean windowStagnationFlag;
+        ValueState<Boolean> windowStagnationFlag;
+
 
         @Override
         public void open(Configuration parameters) throws Exception {
             super.open(parameters);
             count_All = getRuntimeContext().getListState(
                     new ListStateDescriptor<>("count_All", JSONObject.class));
-            windowStagnationFlag = false;
+             windowStagnationFlag = getRuntimeContext().getState(
+                                new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
         }
 
         @Override
