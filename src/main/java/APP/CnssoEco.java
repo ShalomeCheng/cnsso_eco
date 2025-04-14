@@ -86,17 +86,22 @@ public class CnssoEco {
 
     private static class QualityControlProcessFunction extends KeyedProcessFunction<String, JSONObject, JSONObject> {
         ListState<JSONObject> count_All;
-        //记录targetIndex-1条所在的窗口是否形成卡滞
-        ValueState<Boolean> windowStagnationFlag;
-
+        // 记录targetIndex-1条所在的窗口是否形成卡滞
+        ValueState<Boolean> CHL_WindowStagnationFlag;
+        ValueState<Boolean> CDOM_WindowStagnationFlag;
+        ValueState<Boolean> TURBIDITY_WindowStagnationFlag;
 
         @Override
         public void open(Configuration parameters) throws Exception {
             super.open(parameters);
             count_All = getRuntimeContext().getListState(
                     new ListStateDescriptor<>("count_All", JSONObject.class));
-             windowStagnationFlag = getRuntimeContext().getState(
-                                new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
+            CHL_WindowStagnationFlag = getRuntimeContext().getState(
+                    new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
+            CDOM_WindowStagnationFlag = getRuntimeContext().getState(
+                    new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
+            TURBIDITY_WindowStagnationFlag = getRuntimeContext().getState(
+                    new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
         }
 
         @Override
@@ -127,9 +132,9 @@ public class CnssoEco {
             QualityControl.performJianFengTest(jf_window, Constants.CDOM_FIELD, firstWindow);
             QualityControl.performJianFengTest(jf_window, Constants.TURBIDITY_FIELD, firstWindow);
 
-            StagnationTest.performStagnationTest(allMessages, Constants.CHL_FIELD, windowStagnationFlag);
-            StagnationTest.performStagnationTest(allMessages, Constants.CDOM_FIELD, windowStagnationFlag);
-            StagnationTest.performStagnationTest(allMessages, Constants.TURBIDITY_FIELD, windowStagnationFlag);
+            StagnationTest.performStagnationTest(allMessages, Constants.CHL_FIELD, CHL_WindowStagnationFlag);
+            StagnationTest.performStagnationTest(allMessages, Constants.CDOM_FIELD, CDOM_WindowStagnationFlag);
+            StagnationTest.performStagnationTest(allMessages, Constants.TURBIDITY_FIELD, TURBIDITY_WindowStagnationFlag);
 
             // 4.3 更新状态
             count_All.update(allMessages);

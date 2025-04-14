@@ -38,7 +38,7 @@ public class OneClass {
     private static final String TURBIDITY_FIELD = "turbidity";
     private static final int JF_WINDOW_SIZE = 5;
     private static final int TOTAL_WINDOW_SIZE = 22;
-   
+
     private static final Logger logger = LoggerFactory.getLogger(OneClass.class);
 
     public static void main(String[] args) throws Exception {
@@ -105,20 +105,22 @@ public class OneClass {
                     }
                 }).setParallelism(1)
                 .keyBy(a -> a.getJSONObject("profile").getString("device_id"));
-                // jsonObjectStringKeyedStream.print();
-                // SingleOutputStreamOperator<String> mapStrDs =
-                // jsonObjectStringKeyedStream.map(a -> a.toString());
+        // jsonObjectStringKeyedStream.print();
+        // SingleOutputStreamOperator<String> mapStrDs =
+        // jsonObjectStringKeyedStream.map(a -> a.toString());
 
-                // mapStrDs.print();
+        // mapStrDs.print();
 
-                // FlinkKafkaProducer<String> stringFlinkKafkaProducer =
-                // KafkaUtils.sendKafkaDs("dc_std_eco", "test");
+        // FlinkKafkaProducer<String> stringFlinkKafkaProducer =
+        // KafkaUtils.sendKafkaDs("dc_std_eco", "test");
 
-                // mapStrDs.addSink(stringFlinkKafkaProducer);
+        // mapStrDs.addSink(stringFlinkKafkaProducer);
         SingleOutputStreamOperator<JSONObject> process = jsonObjectStringKeyedStream
                 .process(new KeyedProcessFunction<String, JSONObject, JSONObject>() {
                     ListState<JSONObject> count_All;
-                    ValueState<Boolean> windowStagnationFlag;
+                    ValueState<Boolean> CHL_WindowStagnationFlag;
+                    ValueState<Boolean> CDOM_WindowStagnationFlag;
+                    ValueState<Boolean> TURBIDITY_WindowStagnationFlag;
 
                     final Double chl_SmallSize = 50.0;
                     final Double chl_BigSize = 4130.0;
@@ -129,10 +131,14 @@ public class OneClass {
 
                     @Override
                     public void open(Configuration parameters) throws Exception {
-                        super.open(parameters);                       
+                        super.open(parameters);
                         count_All = getRuntimeContext()
                                 .getListState(new ListStateDescriptor<JSONObject>("count_All", JSONObject.class));
-                        windowStagnationFlag = getRuntimeContext().getState(
+                        CHL_WindowStagnationFlag = getRuntimeContext().getState(
+                                new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
+                        CDOM_WindowStagnationFlag = getRuntimeContext().getState(
+                                new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
+                        TURBIDITY_WindowStagnationFlag = getRuntimeContext().getState(
                                 new ValueStateDescriptor<>("booleanState", Types.BOOLEAN));
                     }
 
@@ -183,10 +189,9 @@ public class OneClass {
                         JianFeng_Test(jf_window, CDOM_FIELD, firstWindow);
                         JianFeng_Test(jf_window, TURBIDITY_FIELD, firstWindow);
 
-                        Kazhi_test(allMessages, CHL_FIELD, windowStagnationFlag);
-                        Kazhi_test(allMessages, CDOM_FIELD, windowStagnationFlag);
-                        Kazhi_test(allMessages, TURBIDITY_FIELD,
-                                windowStagnationFlag);
+                        Kazhi_test(allMessages, CHL_FIELD, CHL_WindowStagnationFlag);
+                        Kazhi_test(allMessages, CDOM_FIELD, CDOM_WindowStagnationFlag);
+                        Kazhi_test(allMessages, TURBIDITY_FIELD, TURBIDITY_WindowStagnationFlag);
 
                         // 4.3 更新状态
                         count_All.update(allMessages);
@@ -236,8 +241,8 @@ public class OneClass {
                         double avg = (window.get(0).getJSONObject("data").getDouble(filed_name) +
                                 window.get(1).getJSONObject("data").getDouble(filed_name) +
                                 window.get(2).getJSONObject("data").getDouble(filed_name) +
-                                window.get(3).getJSONObject("data").getDouble(filed_name)
-                                + +window.get(4).getJSONObject("data").getDouble(filed_name) / 5.0);
+                                window.get(3).getJSONObject("data").getDouble(filed_name) +
+                                window.get(4).getJSONObject("data").getDouble(filed_name) / 5.0);
                         return avg;
                     }
 
@@ -261,9 +266,9 @@ public class OneClass {
                             qc_info.put(field_name, "3,1110");
                         }
                     }
-                    //endregion
+                    // endregion
 
-                    //region 卡滞测试
+                    // region 卡滞测试
                     /*
                      * 卡滞测试
                      */
@@ -275,7 +280,7 @@ public class OneClass {
 
                         // 最多计算到n-2位，即第20位的数据
                         int targetIndex = allMessages.size() - 3; // n-2的位置
-                    
+
                         // 从当前位置往前遍历，统计连续相同数据的个数
                         int sameCount = 1;
                         JSONObject currentData = allMessages.get(targetIndex);
@@ -285,7 +290,7 @@ public class OneClass {
                             if (preValue.equals(currentValue)) {
                                 sameCount++;
                                 // 如果前一个窗口是卡滞状态，那么第20位以后相同的数据，直接可以判断为卡滞
-                                if (windowStagnationFlag.value() == true) {
+                                if (Boolean.TRUE.equals(windowStagnationFlag.value())) {
                                     break;
                                 }
                             } else {
@@ -294,7 +299,8 @@ public class OneClass {
                             }
                         }
 
-                        if (windowStagnationFlag.value()) {
+                        if (Boolean.TRUE.equals(windowStagnationFlag.value()))
+                        {
                             System.out.println("标记n-2条卡滞");
                             // targetIndex位直接标记卡滞
                             markStagnation(allMessages.subList(targetIndex, targetIndex + 1), field_name);
@@ -332,9 +338,8 @@ public class OneClass {
                         }
                     }
 
-                    //endregion
+                    // endregion
 
-                
                 });
         FlinkKafkaProducer<String> stringFlinkKafkaProducer1 = KafkaUtils.sendKafkaDs("dc_qc_eco", "test");
         // process.print().setParallelism(1);

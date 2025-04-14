@@ -30,7 +30,7 @@ public class StagnationTest {
             if(preValue.equals(currentValue))
             {
                 sameCount++;
-                //如果前一个窗口是卡滞状态，那么第20位以后相同的数据，直接可以判断为卡滞
+                //如果前一个窗口是卡滞状态，那么第20位以后相同的数据，直接可以判断为卡滞;
                 if(windowStagnationFlag.value() == true)
                 {
                     break;
