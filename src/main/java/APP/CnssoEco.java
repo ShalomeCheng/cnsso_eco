@@ -23,9 +23,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CnssoEco {
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
-    
 
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern(Constants.TIME_FORMAT);
+    
     private static final Logger logger = LoggerFactory.getLogger(CnssoEco.class);
 
     public static void main(String[] args) throws Exception {
@@ -34,6 +34,7 @@ public class CnssoEco {
 
         DataStreamSource<String> localhost = env.socketTextStream(Constants.SOCKET_HOST, Constants.SOCKET_PORT);
 
+        // 1. 数据过滤与分类
         SingleOutputStreamOperator<String> filteredDs = localhost
                 .filter(new FilterFunction<String>() {
                     @Override
@@ -65,10 +66,12 @@ public class CnssoEco {
                 .map(value -> DataTransformer.transformData(JSON.parseObject(value)))
                 .setParallelism(1)
                 .keyBy(a -> a.getJSONObject("profile").getString("device_id"));
-
+        
+        // 2. 数据处理
         SingleOutputStreamOperator<JSONObject> process = jsonObjectStringKeyedStream
                 .process(new QualityControlProcessFunction());
 
+        // 3. 发送消息到下游
         FlinkKafkaProducer<String> stringFlinkKafkaProducer = KafkaUtils.sendKafkaDs(Constants.KAFKA_TOPIC_QC, Constants.KAFKA_GROUP_ID);
         
         process.map(JSONObject::toString)

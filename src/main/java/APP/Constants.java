@@ -1,5 +1,7 @@
 package APP;
 
+import java.time.format.DateTimeFormatter;
+
 public class Constants {
     // 字段名称常量
     public static final String CHL_FIELD = "chl";
@@ -48,4 +50,8 @@ public class Constants {
     // Socket 配置
     public static final String SOCKET_HOST = "hadoop102";
     public static final int SOCKET_PORT = 7777;
+
+    // 时间格式
+    public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+
 } 
