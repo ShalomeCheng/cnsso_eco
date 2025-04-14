@@ -24,16 +24,15 @@ import java.util.List;
 
 public class CnssoEco {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
-    private static final String CHL_FIELD = "chl";
-    private static final String CDOM_FIELD = "cdom";
-    private static final String TURBIDITY_FIELD = "turbidity";
+    
+
     private static final Logger logger = LoggerFactory.getLogger(CnssoEco.class);
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStateBackend(new MemoryStateBackend());
 
-        DataStreamSource<String> localhost = env.socketTextStream("hadoop102", 7777);
+        DataStreamSource<String> localhost = env.socketTextStream(Constants.SOCKET_HOST, Constants.SOCKET_PORT);
 
         SingleOutputStreamOperator<String> filteredDs = localhost
                 .filter(new FilterFunction<String>() {
@@ -44,11 +43,11 @@ public class CnssoEco {
                         }
                         try {
                             JSONObject jsonObj = JSON.parseObject(value);
-                            if (jsonObj == null || !jsonObj.containsKey("data")) {
+                            if (jsonObj == null || !jsonObj.containsKey(Constants.DATA)) {
                                 return false;
                             }
 
-                            JSONObject data = jsonObj.getJSONObject("data");
+                            JSONObject data = jsonObj.getJSONObject(Constants.DATA);
                             if (data == null) {
                                 return false;
                             }
@@ -70,7 +69,7 @@ public class CnssoEco {
         SingleOutputStreamOperator<JSONObject> process = jsonObjectStringKeyedStream
                 .process(new QualityControlProcessFunction());
 
-        FlinkKafkaProducer<String> stringFlinkKafkaProducer = KafkaUtils.sendKafkaDs("dc_qc_eco", "test");
+        FlinkKafkaProducer<String> stringFlinkKafkaProducer = KafkaUtils.sendKafkaDs(Constants.KAFKA_TOPIC_QC, Constants.KAFKA_GROUP_ID);
         
         process.map(JSONObject::toString)
                .addSink(stringFlinkKafkaProducer);
@@ -105,39 +104,39 @@ public class CnssoEco {
             QualityControl.performInstrumentTest(value);
 
             count_All.add(value);
-            setCountSize(count_All, 22);
+            setCountSize(count_All, Constants.TOTAL_WINDOW_SIZE);
             List<JSONObject> count_All_List = new ArrayList<>();
             count_All.get().forEach(count_All_List::add);
-            boolean firstWindow = count_All_List.size() == 5;
+            boolean firstWindow = count_All_List.size() == Constants.JIANFENG_WINDOW_SIZE;
 
             jf_CountListState.add(value);
-            setCountSize(jf_CountListState, 5);
+            setCountSize(jf_CountListState, Constants.JIANFENG_WINDOW_SIZE);
             List<JSONObject> jf_CountList = new ArrayList<>();
             jf_CountListState.get().forEach(jf_CountList::add);
 
-            QualityControl.performJianFengTest(jf_CountList, CHL_FIELD, firstWindow);
-            QualityControl.performJianFengTest(jf_CountList, CDOM_FIELD, firstWindow);
-            QualityControl.performJianFengTest(jf_CountList, TURBIDITY_FIELD, firstWindow);
+            QualityControl.performJianFengTest(jf_CountList, Constants.CHL_FIELD, firstWindow);
+            QualityControl.performJianFengTest(jf_CountList, Constants.CDOM_FIELD, firstWindow);
+            QualityControl.performJianFengTest(jf_CountList, Constants.TURBIDITY_FIELD, firstWindow);
 
             List<JSONObject> chlBuffer = new ArrayList<>();
             chlCountBuffer.get().forEach(chlBuffer::add);
-            StagnationTest.performStagnationTest(chlBuffer, jf_CountList, CHL_FIELD, firstWindow);
+            StagnationTest.performStagnationTest(chlBuffer, jf_CountList, Constants.CHL_FIELD, firstWindow);
             chlCountBuffer.update(chlBuffer);
 
             List<JSONObject> cdomBuffer = new ArrayList<>();
             cdomCountBuffer.get().forEach(cdomBuffer::add);
-            StagnationTest.performStagnationTest(cdomBuffer, jf_CountList, CDOM_FIELD, firstWindow);
+            StagnationTest.performStagnationTest(cdomBuffer, jf_CountList, Constants.CDOM_FIELD, firstWindow);
             cdomCountBuffer.update(cdomBuffer);
 
             List<JSONObject> turbidityBuffer = new ArrayList<>();
             turbidityCountBuffer.get().forEach(turbidityBuffer::add);
-            StagnationTest.performStagnationTest(turbidityBuffer, jf_CountList, TURBIDITY_FIELD, firstWindow);
+            StagnationTest.performStagnationTest(turbidityBuffer, jf_CountList, Constants.TURBIDITY_FIELD, firstWindow);
             turbidityCountBuffer.update(turbidityBuffer);
 
             jf_CountListState.update(jf_CountList);
             count_All.update(count_All_List);
 
-            if (count_All_List.size() == 22) {
+            if (count_All_List.size() == Constants.TOTAL_WINDOW_SIZE) {
                 JSONObject firstData = jf_CountList.get(0);
                 System.out.println(firstData.toString());
                 out.collect(firstData);

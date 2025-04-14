@@ -3,19 +3,12 @@ package APP;
 import com.alibaba.fastjson.JSONObject;
 
 public class DataTransformer {
-    private static final double TURBIDITY_FACTOR = 0.2419;
-    private static final double CDOM_FACTOR = 0.0916;
-    private static final double CHL_FACTOR = 0.0121;
-    private static final int TURBIDITY_BASE = 50;
-    private static final int CDOM_BASE = 50;
-    private static final int CHL_BASE = 48;
-
     public static JSONObject transformData(JSONObject jsonObject) {
-        JSONObject data = jsonObject.getJSONObject("data");
+        JSONObject data = jsonObject.getJSONObject(Constants.DATA);
         
-        data.put("turbidity", TURBIDITY_FACTOR * (data.getDouble("turbidity_count") - TURBIDITY_BASE));
-        data.put("cdom", CDOM_FACTOR * (data.getDouble("cdom_count") - CDOM_BASE));
-        data.put("chl", CHL_FACTOR * (data.getDouble("chl_count") - CHL_BASE));
+        data.put(Constants.TURBIDITY_FIELD, Constants.TURBIDITY_FACTOR * (data.getDouble("turbidity_count") - Constants.TURBIDITY_BASE));
+        data.put(Constants.CDOM_FIELD, Constants.CDOM_FACTOR * (data.getDouble("cdom_count") - Constants.CDOM_BASE));
+        data.put(Constants.CHL_FIELD, Constants.CHL_FACTOR * (data.getDouble("chl_count") - Constants.CHL_BASE));
         
         return jsonObject;
     }
